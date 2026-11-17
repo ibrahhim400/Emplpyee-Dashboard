@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recruitment Dashboard</title>
+<style>
+:root{--bg:#f5f6f8;--card:#ffffff;--ink:#1b2330;--muted:#6a7687;--line:#e3e7ee;--accent:#2563eb;--good:#16a34a;--bad:#dc2626;--warn:#d97706;--chip:#eef2f7;--shadow:0 1px 2px rgba(16,24,40,.06)}
+@media (prefers-color-scheme:dark){:root{--bg:#0e131a;--card:#161d27;--ink:#e7ecf3;--muted:#92a0b3;--line:#263041;--accent:#6b9bff;--good:#34d399;--bad:#f87171;--warn:#fbbf24;--chip:#1f2937;--shadow:none}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Bengali",sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+h1{margin:0;font-size:22px;letter-spacing:-.01em}
+h2{margin:0 0 12px;font-size:16px}
+h3{margin:16px 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.sub{margin:2px 0 0;color:var(--muted);font-size:13px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button:hover,.btn:hover{border-color:var(--accent)}
+.chk{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;max-width:300px;line-height:1.3}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px;box-shadow:var(--shadow)}
+#banner .msg{margin-top:10px;padding:10px 12px;border-radius:10px;font-size:13px;border:1px solid var(--line);background:var(--card)}
+#banner .err{border-color:var(--bad)} #banner .warn{border-color:var(--warn)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi small{display:block;color:var(--muted);font-size:12px}
+.kpi b{font-size:26px;letter-spacing:-.02em}
+.years{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+.years button.on,.mcard.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.months{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}
+.mcard{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;text-align:left;padding:10px 12px;border-radius:12px;background:var(--card)}
+.mcard b{grid-column:1/3;font-size:15px;margin-bottom:2px}
+.mcard .n,.mcard .r{font-size:18px;font-weight:650}
+.mcard small{color:inherit;opacity:.7;font-size:11px}
+.mcard:disabled{opacity:.4;cursor:default}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.tile{background:var(--chip);border-radius:10px;padding:10px 12px}
+.tile small{color:var(--muted);font-size:12px;display:block}
+.tile b{font-size:22px}
+.formula{margin:10px 0 0;font-size:13px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+.bars{max-height:300px;overflow:auto;padding-right:4px}
+.bar{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 28px;gap:8px;align-items:center;font-size:13px;margin:3px 0}
+.bar span.l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar i{display:block;height:8px;border-radius:4px;background:var(--accent)}
+.bar.bad i{background:var(--bad)}
+.bar em{font-style:normal;text-align:right;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px}
+.tw{overflow:auto;max-height:340px;border:1px solid var(--line);border-radius:8px}
+.empty{color:var(--muted);font-size:13px;padding:6px 0}
+.tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;background:var(--chip);color:var(--muted)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;background:var(--c)}
+details summary{cursor:pointer;font-weight:600}
+footer{margin-top:20px;color:var(--muted);font-size:12px}
+svg text{fill:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Recruitment Dashboard</h1>
+      <p class="sub" id="sync">Loading data…</p>
+    </div>
+    <div class="tools">
+      <label class="chk"><input type="checkbox" id="optAnom"> Treat “last working day before joining date” as Did Not Join</label>
+      <button id="btnRefresh" type="button">Refresh now</button>
+      <label class="btn">Load CSV file<input type="file" id="file" accept=".csv,text/csv" multiple hidden></label>
+    </div>
+  </header>
+  <div id="banner"></div>
+  <section class="kpis" id="kpis"></section>
+  <nav class="years" id="years"></nav>
+  <section class="card"><h2 id="chartTitle"></h2><div id="chart"></div>
+    <div class="legend"><span style="--c:var(--good)">Joined</span><span style="--c:var(--bad)">Left</span><span style="--c:var(--accent)">Turnover %</span></div>
+  </section>
+  <section class="months" id="months"></section>
+  <section class="card" id="detail"></section>
+  <section class="card" id="dnjYear"></section>
+  <details class="card" id="issues"></details>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+/* ======================= CONFIG ======================= */
+const CONFIG = {
+  SHEET_ID: '1B_Dyh8NdpALA1er9qcsmn_pp2aG-c6tLk2WikIdn_3s',
+  // Add or remove tabs here. Use gid for a known tab, or sheet for the tab name.
+  TABS: [
+    { label: 'Field', gid: '1169921246' }
+  ],
+  REFRESH_MINUTES: 5
+};
+
+/*CORE_START*/
+const MON = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function clean(s){ return String(s == null ? '' : s).replace(/[\u200B-\u200D\u2060\uFEFF]/g,'').replace(/\s+/g,' ').trim(); }
+
+function parseCSV(t){
+  if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1);
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < t.length; i++){
+    const c = t[i];
+    if (q){
+      if (c === '"'){ if (t[i+1] === '"'){ f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ','){ row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r'){ if (c === '\r' && t[i+1] === '\n') i++; row.push(f); f = ''; rows.push(row); row = []; }
+    else f += c;
+  }
+  if (f !== '' || row.length){ row.push(f); rows.push(row); }
+  return rows;
+}
+
+function mk(y,m,d){ if (m < 0 || m > 11 || d < 1 || d > 31) return null; return {y:y, m:m, d:d, key:y*10000+(m+1)*100+d}; }
+function yr(s){ let y = +s; if (String(s).length <= 2) y += 2000; return y; }
+function parseDate(v){
+  v = clean(v); if (!v || v === '-') return null;
+  let m;
+  if ((m = v.match(/^(\d{1,2})[-\s\/\.]([A-Za-z]{3,9})[-\s\/\.,]*(\d{2,4})$/))){
+    const mo = MON[m[2].slice(0,3).toLowerCase()]; if (mo === undefined) return null;
+    return mk(yr(m[3]), mo, +m[1]);
+  }
+  if ((m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return mk(+m[1], +m[2]-1, +m[3]);
+  if ((m = v.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/))){
+    let d = +m[1], mo = +m[2];
+    if (mo > 12 && d <= 12){ const t = d; d = mo; mo = t; }
+    return mk(yr(m[3]), mo-1, d);
+  }
+  return null;
+}
+
+function normHeader(h){ return clean(h).toLowerCase().replace(/[^a-z0-9]/g,''); }
+const ALIASES = {
+  name:   ['employeename','name','fullname'],
+  code:   ['newstaffcode','staffcode','employeeid','empid'],
+  join:   ['joiningdate','joindate','dateofjoining'],
+  status: ['emplyeestatus','employeestatus','status'],
+  lwd:    ['lastwrokingday','lastworkingday','lastworkingdate','lwd'],
+  dept:   ['department','dept'],
+  area:   ['updatedcoveredarea','coveredarea']
+};
+
+function buildEmployees(rows, tabLabel){
+  let hi = -1;
+  for (let i = 0; i < Math.min(rows.length, 6); i++){
+    const hs = rows[i].map(normHeader);
+    if (hs.includes('joiningdate') || hs.includes('joindate')){ hi = i; break; }
+  }
+  if (hi < 0) throw new Error('Tab "' + tabLabel + '": could not find a "Joining Date" column.');
+  const hs = rows[hi].map(normHeader);
+  const idx = {};
+  for (const k in ALIASES) idx[k] = hs.findIndex(h => ALIASES[k].includes(h));
+  const missing = ['name','join','status'].filter(k => idx[k] < 0);
+  if (missing.length) throw new Error('Tab "' + tabLabel + '": missing column(s): ' + missing.join(', ') + '.');
+  const out = [];
+  for (let i = hi + 1; i < rows.length; i++){
+    const r = rows[i];
+    const g = k => idx[k] < 0 ? '' : clean(r[idx[k]]);
+    const name = g('name'); if (!name) continue;
+    out.push({
+      name: name, code: g('code'), tab: tabLabel, row: i + 1,
+      joinRaw: g('join'), lwdRaw: g('lwd'),
+      join: parseDate(g('join')), lwd: parseDate(g('lwd')),
+      statusRaw: g('status'),
+      dept: g('dept') || 'Not specified',
+      area: g('area') || 'Not specified'
+    });
+  }
+  return out;
+}
+
+/* kind: dnj | active | left | excluded.  counted = takes part in joins/headcount/turnover */
+function classify(emps, opts){
+  const issues = [];
+  for (const e of emps){
+    const s = e.statusRaw.toLowerCase();
+    e.counted = false; e.isLeft = false; e.kind = 'excluded'; e.anomaly = false;
+    if (/did\s*not\s*join|not\s*joined|\bdnj\b|no[\s-]*show/.test(s)){ e.kind = 'dnj'; continue; }
+    if (!e.join){ issues.push({e:e, msg:'Joining Date is missing or unreadable ("' + e.joinRaw + '"). Left out of all counts.'}); continue; }
+    if (e.lwd && e.lwd.key < e.join.key){
+      e.anomaly = true;
+      if (opts && opts.anomalyAsDnj){ e.kind = 'dnj'; }
+      issues.push({e:e, msg:'Last working day (' + e.lwdRaw + ') is before joining date (' + e.joinRaw + ').' + (opts && opts.anomalyAsDnj ? ' Counted as Did Not Join.' : ' Left out of all counts. Possibly a Did Not Join.')});
+      continue;
+    }
+    const active = /^active/.test(s);
+    if (active){
+      e.kind = 'active'; e.counted = true;
+      if (e.lwd) issues.push({e:e, msg:'Status is Active but a last working day (' + e.lwdRaw + ') is filled. Treated as Active.'});
+    } else {
+      e.kind = 'left'; e.counted = true; e.isLeft = true;
+      if (!e.lwd) issues.push({e:e, msg:'Status is "' + e.statusRaw + '" but last working day is empty. Not counted in any month\u2019s turnover.'});
+    }
+  }
+  return issues;
+}
+
+function present(e, key){
+  if (!e.counted || e.join.key > key) return false;
+  if (e.isLeft) return e.lwd ? e.lwd.key > key : false;
+  return true;
+}
+
+function monthStats(emps, y, m){
+  const endK = y*10000 + (m+1)*100 + 31;
+  const prevEnd = m === 0 ? (y-1)*10000 + 1231 : y*10000 + m*100 + 31;
+  const inM = d => d && d.y === y && d.m === m;
+  const joined = [], dnj = [], left = [];
+  let open = 0, close = 0;
+  for (const e of emps){
+    if (e.kind === 'dnj'){ if (inM(e.join)) dnj.push(e); continue; }
+    if (!e.counted) continue;
+    if (inM(e.join)) joined.push(e);
+    if (e.isLeft && inM(e.lwd)) left.push(e);
+    if (present(e, prevEnd)) open++;
+    if (present(e, endK)) close++;
+  }
+  const avg = (open + close) / 2;
+  return {joined:joined, dnj:dnj, left:left, open:open, close:close, avg:avg, rate: avg > 0 ? left.length / avg * 100 : null};
+}
+
+function groupCount(list, fn){
+  const m = new Map();
+  for (const e of list){ const k = fn(e); m.set(k, (m.get(k) || 0) + 1); }
+  return Array.from(m.entries()).sort((a,b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+}
+/*CORE_END*/
+
+/* ======================= UI ======================= */
+const now = new Date();
+const todayKey = now.getFullYear()*10000 + (now.getMonth()+1)*100 + now.getDate();
+const nowIdx = now.getFullYear()*12 + now.getMonth();
+const S = { tabs: [], emps: [], issues: [], year: now.getFullYear(), month: now.getMonth(), stats: [], opts: {anomalyAsDnj: false}, errors: [], syncedAt: null, source: 'live' };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtRate = r => r == null ? '–' : r.toFixed(1) + '%';
+
+async function fetchTab(t){
+  const sel = t.gid ? 'gid=' + encodeURIComponent(t.gid) : 'sheet=' + encodeURIComponent(t.sheet);
+  const url = 'https://docs.google.com/spreadsheets/d/' + CONFIG.SHEET_ID + '/gviz/tq?tqx=out:csv&headers=1&' + sel + '&_=' + Date.now();
+  const r = await fetch(url, {cache: 'no-store'});
+  if (!r.ok) throw new Error('Tab "' + t.label + '": HTTP ' + r.status + '. Check the tab name / sharing.');
+  const txt = await r.text();
+  if (/^\s*<(!doctype|html)/i.test(txt)) throw new Error('Tab "' + t.label + '": the sheet is not shared publicly (Google returned a sign-in page).');
+  return parseCSV(txt);
+}
+
+async function refresh(){
+  $('btnRefresh').disabled = true;
+  const res = await Promise.allSettled(CONFIG.TABS.map(async t => buildEmployees(await fetchTab(t), t.label)));
+  const errors = [], tabs = [];
+  res.forEach((r, i) => { if (r.status === 'fulfilled') tabs.push({label: CONFIG.TABS[i].label, emps: r.value}); else errors.push(r.reason && r.reason.message ? r.reason.message : String(r.reason)); });
+  S.errors = errors;
+  if (tabs.length){ S.tabs = tabs; S.source = 'live'; S.syncedAt = new Date(); }
+  recompute();
+  $('btnRefresh').disabled = false;
+}
+
+function recompute(){
+  S.emps = [].concat.apply([], S.tabs.map(t => t.emps));
+  S.issues = classify(S.emps, S.opts);
+  render();
+}
+
+function render(){
+  const ys = S.emps.flatMap(e => [e.join && e.join.y, e.lwd && e.lwd.y]).filter(Boolean);
+  const minY = ys.length ? Math.min.apply(null, ys) : now.getFullYear();
+  const maxY = Math.max(now.getFullYear(), ys.length ? Math.max.apply(null, ys) : 0);
+  S.years = []; for (let y = minY; y <= maxY; y++) S.years.push(y);
+  if (S.years.indexOf(S.year) < 0) S.year = S.years[S.years.length - 1];
+  S.stats = []; for (let m = 0; m < 12; m++) S.stats.push(monthStats(S.emps, S.year, m));
+  renderBanner(); renderKpis(); renderYears(); renderChart(); renderMonths(); renderDetail(); renderDnjYear(); renderIssues();
+  $('sync').textContent = S.syncedAt
+    ? (S.source === 'file' ? 'Loaded from CSV file' : 'Live from Google Sheet') + ' · synced ' + S.syncedAt.toLocaleTimeString() + ' · auto-refresh every ' + CONFIG.REFRESH_MINUTES + ' min'
+    : 'No data loaded yet';
+  $('foot').textContent = 'Turnover % = employees who left in the month ÷ average headcount × 100, where average headcount = (headcount at start of month + headcount at end of month) ÷ 2. Did Not Join employees are not counted as joined or in headcount. Area = “Updated Covered Area”.';
+}
+
+function renderBanner(){
+  let h = '';
+  S.errors.forEach(e => { h += '<div class="msg err">' + esc(e) + '</div>'; });
+  if (S.errors.length && !S.tabs.length){
+    h += '<div class="msg warn">Could not load the Google Sheet. Make sure the sheet is shared as “Anyone with the link can view”, or download the tab as CSV (File → Download → CSV) and use <b>Load CSV file</b> above.</div>';
+  }
+  $('banner').innerHTML = h;
+}
+
+function renderKpis(){
+  const st = S.stats, y = S.year;
+  const sum = k => st.reduce((a, s) => a + s[k].length, 0);
+  const upto = st.filter((s, i) => y*12 + i <= nowIdx);
+  const avgSum = upto.reduce((a, s) => a + s.avg, 0), leftSum = upto.reduce((a, s) => a + s.left.length, 0);
+  const yearRate = upto.length && avgSum > 0 ? leftSum / (avgSum / upto.length) * 100 : null;
+  const active = S.emps.filter(e => present(e, todayKey)).length;
+  const tiles = [
+    ['Current headcount', active],
+    ['Joined in ' + y, sum('joined')],
+    ['Left in ' + y, sum('left')],
+    ['Did Not Join in ' + y, sum('dnj')],
+    ['Turnover ' + y + ' (total left ÷ avg headcount)', fmtRate(yearRate)]
+  ];
+  $('kpis').innerHTML = tiles.map(t => '<div class="kpi"><small>' + esc(t[0]) + '</small><b>' + esc(t[1]) + '</b></div>').join('');
+}
+
+function renderYears(){
+  $('years').innerHTML = S.years.map(y => '<button type="button" data-y="' + y + '" class="' + (y === S.year ? 'on' : '') + '">' + y + '</button>').join('');
+}
+
+function renderChart(){
+  $('chartTitle').textContent = 'Month-wise joining, leaving and turnover — ' + S.year;
+  const st = S.stats, W = 760, H = 250, pl = 30, pr = 30, pt = 18, pb = 28, ph = H - pt - pb, bw = (W - pl - pr) / 12;
+  const maxC = Math.max(1, ...st.map(s => Math.max(s.joined.length, s.left.length)));
+  const maxR = Math.max(1, ...st.map(s => s.rate || 0));
+  let g = '';
+  for (let k = 0; k <= 4; k++){ const yy = pt + ph - ph * k / 4; g += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--line)"/>'; g += '<text x="' + (pl - 4) + '" y="' + (yy + 4) + '" text-anchor="end">' + Math.round(maxC * k / 4) + '</text>'; g += '<text x="' + (W - pr + 4) + '" y="' + (yy + 4) + '">' + (maxR * k / 4).toFixed(0) + '%</text>'; }
+  const pts = [];
+  st.forEach((s, i) => {
+    const x = pl + i * bw, h1 = s.joined.length / maxC * ph, h2 = s.left.length / maxC * ph;
+    g += '<rect x="' + (x + bw*.14) + '" y="' + (pt + ph - h1) + '" width="' + (bw*.34) + '" height="' + h1 + '" rx="2" fill="var(--good)"/>';
+    g += '<rect x="' + (x + bw*.52) + '" y="' + (pt + ph - h2) + '" width="' + (bw*.34) + '" height="' + h2 + '" rx="2" fill="var(--bad)"/>';
+    g += '<text x="' + (x + bw/2) + '" y="' + (H - 10) + '" text-anchor="middle"' + (i === S.month ? ' style="font-weight:700;fill:var(--ink)"' : '') + '>' + MN[i].slice(0,3) + '</text>';
+    if (s.rate != null) pts.push([x + bw/2, pt + ph - s.rate / maxR * ph]);
+    g += '<rect data-m="' + i + '" x="' + x + '" y="' + pt + '" width="' + bw + '" height="' + (ph + pb) + '" fill="transparent" style="cursor:pointer"><title>' + MN[i] + ': joined ' + s.joined.length + ', left ' + s.left.length + ', turnover ' + fmtRate(s.rate) + '</title></rect>';
+  });
+  if (pts.length){
+    g += '<polyline fill="none" stroke="var(--accent)" stroke-width="2" points="' + pts.map(p => p.join(',')).join(' ') + '"/>';
+    pts.forEach(p => { g += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="3" fill="var(--accent)"/>'; });
+  }
+  $('chart').innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Monthly joined, left and turnover chart">' + g + '</svg>';
+}
+
+function renderMonths(){
+  $('months').innerHTML = S.stats.map((s, i) => {
+    const future = S.year*12 + i > nowIdx && !s.joined.length && !s.left.length && !s.dnj.length;
+    return '<button type="button" class="mcard ' + (i === S.month ? 'on' : '') + '" data-m="' + i + '"' + (future ? ' disabled' : '') + '>' +
+      '<b>' + MN[i] + '</b><span class="n">' + s.joined.length + '</span><span class="r">' + fmtRate(s.rate) + '</span><small>joined</small><small>turnover</small></button>';
+  }).join('');
+}
+
+function bars(list, cls){
+  if (!list.length) return '<div class="empty">None</div>';
+  const mx = list[0][1];
+  return '<div class="bars">' + list.map(r => '<div class="bar ' + (cls || '') + '"><span class="l" title="' + esc(r[0]) + '">' + esc(r[0]) + '</span><i style="width:' + (r[1] / mx * 100) + '%"></i><em>' + r[1] + '</em></div>').join('') + '</div>';
+}
+
+function table(list, cols){
+  if (!list.length) return '<div class="empty">None</div>';
+  return '<div class="tw"><table><thead><tr>' + cols.map(c => '<th>' + c[0] + '</th>').join('') + '</tr></thead><tbody>' +
+    list.map(e => '<tr>' + cols.map(c => '<td>' + esc(c[1](e)) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+}
+
+const COLS_JOIN = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw], ['Status', e => e.statusRaw], ['Tab', e => e.tab]];
+const COLS_LEFT = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Last working day', e => e.lwdRaw], ['Tab', e => e.tab]];
+
+function dnjBlock(list){
+  if (!list.length) return '<div class="empty">No “Did Not Join” employees in this period.</div>';
+  return '<div class="cols"><div><h3>By department</h3>' + bars(groupCount(list, e => e.dept), 'bad') + '</div><div><h3>By area</h3>' + bars(groupCount(list, e => e.area), 'bad') + '</div></div><h3>Employees</h3>' + table(list, COLS_JOIN);
+}
+
+function renderDetail(){
+  const s = S.stats[S.month], title = MN[S.month] + ' ' + S.year;
+  const tile = (l, v) => '<div class="tile"><small>' + l + '</small><b>' + v + '</b></div>';
+  const f = s.avg > 0 ? s.left.length + ' ÷ ((' + s.open + ' + ' + s.close + ') ÷ 2) × 100 = ' + fmtRate(s.rate) : 'No headcount in this month, so turnover cannot be calculated.';
+  $('detail').innerHTML =
+    '<h2>' + title + '</h2>' +
+    '<div class="tiles">' + tile('Joined', s.joined.length) + tile('Did Not Join', s.dnj.length) + tile('Left', s.left.length) + tile('Headcount at start', s.open) + tile('Headcount at end', s.close) + tile('Turnover', fmtRate(s.rate)) + '</div>' +
+    '<p class="formula">Turnover = left ÷ ((start + end headcount) ÷ 2) × 100 → ' + f + '</p>' +
+    '<h3>Joined in ' + title + ' (' + s.joined.length + ')</h3>' +
+    '<div class="cols"><div><h4 style="margin:0 0 6px;font-size:13px">By department</h4>' + bars(groupCount(s.joined, e => e.dept)) + '</div><div><h4 style="margin:0 0 6px;font-size:13px">By area</h4>' + bars(groupCount(s.joined, e => e.area)) + '</div></div>' +
+    '<h3>Employees who joined</h3>' + table(s.joined, COLS_JOIN) +
+    '<h3>Did Not Join in ' + title + ' (' + s.dnj.length + ')</h3>' + dnjBlock(s.dnj) +
+    '<h3>Left in ' + title + ' (' + s.left.length + ')</h3>' + table(s.left, COLS_LEFT);
+}
+
+function renderDnjYear(){
+  const list = [].concat.apply([], S.stats.map(s => s.dnj));
+  $('dnjYear').innerHTML = '<h2>Did Not Join — all of ' + S.year + ' (' + list.length + ')</h2>' + dnjBlock(list);
+}
+
+function renderIssues(){
+  const d = $('issues');
+  d.innerHTML = '<summary>Data check (' + S.issues.length + ' item' + (S.issues.length === 1 ? '' : 's') + ' to review in the sheet)</summary>' +
+    (S.issues.length ? '<div class="tw" style="margin-top:10px"><table><thead><tr><th>Employee</th><th>Tab / row</th><th>Issue</th></tr></thead><tbody>' +
+      S.issues.map(i => '<tr><td>' + esc(i.e.name) + '</td><td>' + esc(i.e.tab) + ' / ' + i.e.row + '</td><td>' + esc(i.msg) + '</td></tr>').join('') + '</tbody></table></div>'
+      : '<div class="empty">No problems found.</div>');
+}
+
+/* ======================= EVENTS ======================= */
+document.addEventListener('click', ev => {
+  const y = ev.target.closest('[data-y]'); if (y){ S.year = +y.dataset.y; render(); return; }
+  const m = ev.target.closest('[data-m]'); if (m && !m.disabled){ S.month = +m.dataset.m; render(); if (!m.closest('#chart') ) { $('detail').scrollIntoView({behavior:'smooth', block:'nearest'}); } }
+});
+$('btnRefresh').addEventListener('click', refresh);
+$('optAnom').addEventListener('change', e => { S.opts.anomalyAsDnj = e.target.checked; recompute(); });
+$('file').addEventListener('change', async e => {
+  const files = Array.from(e.target.files); if (!files.length) return;
+  const tabs = [], errors = [];
+  for (const f of files){
+    try { tabs.push({label: f.name.replace(/\.csv$/i, ''), emps: buildEmployees(parseCSV(await f.text()), f.name)}); }
+    catch (err){ errors.push(err.message); }
+  }
+  S.errors = errors;
+  if (tabs.length){ S.tabs = tabs; S.source = 'file'; S.syncedAt = new Date(); }
+  recompute();
+  e.target.value = '';
+});
+
+refresh();
+setInterval(refresh, CONFIG.REFRESH_MINUTES * 60000);
+</script>
+</body>
+</html>
