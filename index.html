@@ -56,6 +56,27 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;background:var(--c)}
 details summary{cursor:pointer;font-weight:600}
 footer{margin-top:20px;color:var(--muted);font-size:12px}
+.dtop{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin:8px 0 12px}
+.big{font-size:26px;letter-spacing:-.02em;color:var(--bad)}
+.seg{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.seg button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;align-items:start}
+.dgrp{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--card)}
+.dh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.dh b{font-size:14px}
+.cnt{min-width:26px;text-align:center;padding:1px 8px;border-radius:99px;background:var(--bad);color:#fff;font-size:12px;font-weight:650}
+.dsub{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.dsh{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--muted)}
+.dsh em{font-style:normal;font-weight:500}
+.dsub ul{list-style:none;margin:4px 0 0;padding:0}
+.dsub li{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:2px 0}
+.dsub li small{color:var(--muted);white-space:nowrap;font-size:12px}
+.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(10,15,24,.55)}
+.modal[hidden]{display:none}
+.dialog{position:relative;width:100%;max-width:920px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+#detail{max-height:88vh;overflow:auto;padding:20px 22px 24px}
+#detail h2{font-size:20px;padding-right:44px}
+.close{position:absolute;top:10px;right:12px;z-index:2;width:34px;height:34px;padding:0;border-radius:50%;font-size:20px;line-height:1}
 svg text{fill:var(--muted);font-size:11px}
 </style>
 </head>
@@ -79,7 +100,12 @@ svg text{fill:var(--muted);font-size:11px}
     <div class="legend"><span style="--c:var(--good)">Joined</span><span style="--c:var(--bad)">Left</span><span style="--c:var(--accent)">Turnover %</span></div>
   </section>
   <section class="months" id="months"></section>
-  <section class="card" id="detail"></section>
+  <div class="modal" id="modal" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dtitle">
+      <button type="button" class="close" id="mclose" aria-label="Close">&times;</button>
+      <div id="detail"></div>
+    </div>
+  </div>
   <section class="card" id="dnjYear"></section>
   <details class="card" id="issues"></details>
   <footer id="foot"></footer>
@@ -238,7 +264,7 @@ function groupCount(list, fn){
 const now = new Date();
 const todayKey = now.getFullYear()*10000 + (now.getMonth()+1)*100 + now.getDate();
 const nowIdx = now.getFullYear()*12 + now.getMonth();
-const S = { tabs: [], emps: [], issues: [], year: now.getFullYear(), month: now.getMonth(), stats: [], opts: {anomalyAsDnj: false}, errors: [], syncedAt: null, source: 'live' };
+const S = { tabs: [], emps: [], issues: [], year: now.getFullYear(), month: now.getMonth(), open: false, dnjBy: 'dept', stats: [], opts: {anomalyAsDnj: false}, errors: [], syncedAt: null, source: 'live' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtRate = r => r == null ? '–' : r.toFixed(1) + '%';
@@ -277,7 +303,10 @@ function render(){
   S.years = []; for (let y = minY; y <= maxY; y++) S.years.push(y);
   if (S.years.indexOf(S.year) < 0) S.year = S.years[S.years.length - 1];
   S.stats = []; for (let m = 0; m < 12; m++) S.stats.push(monthStats(S.emps, S.year, m));
-  renderBanner(); renderKpis(); renderYears(); renderChart(); renderMonths(); renderDetail(); renderDnjYear(); renderIssues();
+  renderBanner(); renderKpis(); renderYears(); renderChart(); renderMonths();
+  const sc = $('detail').scrollTop; renderDetail(); $('detail').scrollTop = sc;
+  $('modal').hidden = !S.open; document.body.style.overflow = S.open ? 'hidden' : '';
+  renderDnjYear(); renderIssues();
   $('sync').textContent = S.syncedAt
     ? (S.source === 'file' ? 'Loaded from CSV file' : 'Live from Google Sheet') + ' · synced ' + S.syncedAt.toLocaleTimeString() + ' · auto-refresh every ' + CONFIG.REFRESH_MINUTES + ' min'
     : 'No data loaded yet';
@@ -357,12 +386,30 @@ function table(list, cols){
     list.map(e => '<tr>' + cols.map(c => '<td>' + esc(c[1](e)) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
 }
 
+function dnjGroups(list){
+  const byDept = S.dnjBy !== 'area';
+  const pk = byDept ? (e => e.dept) : (e => e.area), sk = byDept ? (e => e.area) : (e => e.dept);
+  const seg = '<div class="seg"><span>Group by</span>' +
+    '<button type="button" data-dnj="dept" class="' + (byDept ? 'on' : '') + '">Department</button>' +
+    '<button type="button" data-dnj="area" class="' + (byDept ? '' : 'on') + '">Area</button></div>';
+  const cards = groupCount(list, pk).map(g => {
+    const members = list.filter(e => pk(e) === g[0]);
+    const subs = groupCount(members, sk).map(s => {
+      const people = members.filter(e => sk(e) === s[0]).sort((a, b) => (a.join ? a.join.key : 0) - (b.join ? b.join.key : 0));
+      return '<div class="dsub"><div class="dsh"><span>' + esc(s[0]) + '</span><em>' + s[1] + '</em></div><ul>' +
+        people.map(e => '<li><span>' + esc(e.name) + '</span><small>' + esc(e.joinRaw) + '</small></li>').join('') + '</ul></div>';
+    }).join('');
+    return '<div class="dgrp"><div class="dh"><b>' + esc(g[0]) + '</b><span class="cnt">' + g[1] + '</span></div>' + subs + '</div>';
+  }).join('');
+  return '<div class="dtop"><div><b class="big">' + list.length + '</b> <span class="sub">employee' + (list.length === 1 ? '' : 's') + ' did not join · date shown is the planned joining date</span></div>' + seg + '</div><div class="dgrid">' + cards + '</div>';
+}
+
 const COLS_JOIN = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw], ['Status', e => e.statusRaw], ['Tab', e => e.tab]];
 const COLS_LEFT = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Last working day', e => e.lwdRaw], ['Tab', e => e.tab]];
 
 function dnjBlock(list){
   if (!list.length) return '<div class="empty">No “Did Not Join” employees in this period.</div>';
-  return '<div class="cols"><div><h3>By department</h3>' + bars(groupCount(list, e => e.dept), 'bad') + '</div><div><h3>By area</h3>' + bars(groupCount(list, e => e.area), 'bad') + '</div></div><h3>Employees</h3>' + table(list, COLS_JOIN);
+  return dnjGroups(list);
 }
 
 function renderDetail(){
@@ -370,7 +417,7 @@ function renderDetail(){
   const tile = (l, v) => '<div class="tile"><small>' + l + '</small><b>' + v + '</b></div>';
   const f = s.avg > 0 ? s.left.length + ' ÷ ((' + s.open + ' + ' + s.close + ') ÷ 2) × 100 = ' + fmtRate(s.rate) : 'No headcount in this month, so turnover cannot be calculated.';
   $('detail').innerHTML =
-    '<h2>' + title + '</h2>' +
+    '<h2 id="dtitle">' + title + '</h2>' +
     '<div class="tiles">' + tile('Joined', s.joined.length) + tile('Did Not Join', s.dnj.length) + tile('Left', s.left.length) + tile('Headcount at start', s.open) + tile('Headcount at end', s.close) + tile('Turnover', fmtRate(s.rate)) + '</div>' +
     '<p class="formula">Turnover = left ÷ ((start + end headcount) ÷ 2) × 100 → ' + f + '</p>' +
     '<h3>Joined in ' + title + ' (' + s.joined.length + ')</h3>' +
@@ -395,9 +442,14 @@ function renderIssues(){
 
 /* ======================= EVENTS ======================= */
 document.addEventListener('click', ev => {
+  const dn = ev.target.closest('[data-dnj]'); if (dn){ S.dnjBy = dn.dataset.dnj; render(); return; }
   const y = ev.target.closest('[data-y]'); if (y){ S.year = +y.dataset.y; render(); return; }
-  const m = ev.target.closest('[data-m]'); if (m && !m.disabled){ S.month = +m.dataset.m; render(); if (!m.closest('#chart') ) { $('detail').scrollIntoView({behavior:'smooth', block:'nearest'}); } }
+  const m = ev.target.closest('[data-m]'); if (m && !m.disabled){ S.month = +m.dataset.m; S.open = true; render(); }
 });
+function closeModal(){ S.open = false; render(); }
+$('mclose').addEventListener('click', closeModal);
+$('modal').addEventListener('click', ev => { if (ev.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && S.open) closeModal(); });
 $('btnRefresh').addEventListener('click', refresh);
 $('optAnom').addEventListener('change', e => { S.opts.anomalyAsDnj = e.target.checked; recompute(); });
 $('file').addEventListener('change', async e => {
