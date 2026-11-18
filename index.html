@@ -56,6 +56,10 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;background:var(--c)}
 details summary{cursor:pointer;font-weight:600}
 footer{margin-top:20px;color:var(--muted);font-size:12px}
+.trow{cursor:pointer}.trow:hover{background:var(--chip)}
+.rbar{display:flex;align-items:center;gap:8px}
+.rtrack{display:block;width:90px;height:8px;border-radius:4px;background:var(--chip);overflow:hidden}
+.rtrack i{display:block;height:100%;background:var(--accent)}
 .dtop{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin:8px 0 12px}
 .big{font-size:26px;letter-spacing:-.02em;color:var(--bad)}
 .seg{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
@@ -100,6 +104,7 @@ svg text{fill:var(--muted);font-size:11px}
     <div class="legend"><span style="--c:var(--good)">Joined</span><span style="--c:var(--bad)">Left</span><span style="--c:var(--accent)">Turnover %</span></div>
   </section>
   <section class="months" id="months"></section>
+  <section class="card" id="turnover"></section>
   <div class="modal" id="modal" hidden>
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dtitle">
       <button type="button" class="close" id="mclose" aria-label="Close">&times;</button>
@@ -307,7 +312,7 @@ function render(){
   S.years = []; for (let y = minY; y <= maxY; y++) S.years.push(y);
   if (S.years.indexOf(S.year) < 0) S.year = S.years[S.years.length - 1];
   S.stats = []; for (let m = 0; m < 12; m++) S.stats.push(monthStats(S.emps, S.year, m));
-  renderBanner(); renderKpis(); renderYears(); renderChart(); renderMonths();
+  renderBanner(); renderKpis(); renderYears(); renderChart(); renderMonths(); renderTurnover();
   const sc = $('detail').scrollTop; renderDetail(); $('detail').scrollTop = sc;
   $('modal').hidden = !S.open; document.body.style.overflow = S.open ? 'hidden' : '';
   renderDnjYear(); renderIssues();
@@ -378,6 +383,32 @@ function renderMonths(){
   }).join('');
 }
 
+function renderTurnover(){
+  const st = S.stats, mx = Math.max(1, ...st.map(s => s.rate || 0));
+  const num = v => String(+v.toFixed(1));
+  const rows = st.map((s, i) => {
+    const future = S.year*12 + i > nowIdx;
+    if (future) return '<tr style="color:var(--muted)"><td>' + MN[i] + '</td><td colspan="6">–</td></tr>';
+    const rate = s.rate == null ? '–' : '<div class="rbar"><span class="rtrack"><i style="width:' + (s.rate / mx * 100) + '%"></i></span><b>' + fmtRate(s.rate) + '</b></div>';
+    return '<tr class="trow" data-m="' + i + '"><td><b>' + MN[i] + '</b></td><td>' + s.open + '</td><td>' + s.joined.length + '</td><td>' + s.left.length + '</td><td>' + s.close + '</td><td>' + num(s.avg) + '</td><td>' + rate + '</td></tr>';
+  }).join('');
+  const upto = st.filter((s, i) => S.year*12 + i <= nowIdx);
+  const avgSum = upto.reduce((a, s) => a + s.avg, 0), leftSum = upto.reduce((a, s) => a + s.left.length, 0), joinSum = upto.reduce((a, s) => a + s.joined.length, 0);
+  const yr = upto.length && avgSum > 0 ? leftSum / (avgSum / upto.length) * 100 : null;
+  const total = '<tr style="font-weight:650"><td>Total ' + S.year + '</td><td></td><td>' + joinSum + '</td><td>' + leftSum + '</td><td></td><td></td><td>' + fmtRate(yr) + '</td></tr>';
+  $('turnover').innerHTML = '<h2>Monthly turnover — ' + S.year + '</h2>' +
+    '<p class="sub" style="margin:-6px 0 10px">Each month is calculated on its own: left ÷ ((start + end headcount) ÷ 2) × 100. Click a month for the full list.</p>' +
+    '<div class="tw" style="max-height:none"><table><thead><tr><th>Month</th><th>Headcount at start</th><th>Joined</th><th>Left</th><th>Headcount at end</th><th>Average headcount</th><th>Turnover</th></tr></thead><tbody>' + rows + total + '</tbody></table></div>';
+}
+
+function hcAt(key){ return S.emps.filter(e => present(e, key)); }
+function hcDetails(y, m){
+  const prevEnd = m === 0 ? (y-1)*10000 + 1231 : y*10000 + m*100 + 31, endK = y*10000 + (m+1)*100 + 31;
+  const cols = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw]];
+  const d = (t, k) => { const l = hcAt(k); return '<details style="margin-top:12px"><summary>' + t + ' (' + l.length + ')</summary><div style="margin-top:8px">' + table(l, cols) + '</div></details>'; };
+  return d('Headcount at start of ' + MN[m] + ' (everyone already working)', prevEnd) + d('Headcount at end of ' + MN[m], endK);
+}
+
 function bars(list, cls){
   if (!list.length) return '<div class="empty">None</div>';
   const mx = list[0][1];
@@ -428,7 +459,8 @@ function renderDetail(){
     '<div class="cols"><div><h4 style="margin:0 0 6px;font-size:13px">By department</h4>' + bars(groupCount(s.joined, e => e.dept)) + '</div><div><h4 style="margin:0 0 6px;font-size:13px">By area</h4>' + bars(groupCount(s.joined, e => e.area)) + '</div></div>' +
     '<h3>Employees who joined</h3>' + table(s.joined, COLS_JOIN) +
     '<h3>Did Not Join in ' + title + ' (' + s.dnj.length + ')</h3>' + dnjBlock(s.dnj) +
-    '<h3>Left in ' + title + ' (' + s.left.length + ')</h3>' + table(s.left, COLS_LEFT);
+    '<h3>Left in ' + title + ' (' + s.left.length + ')</h3>' + table(s.left, COLS_LEFT) +
+    '<h3>Headcount lists</h3>' + hcDetails(S.year, S.month);
 }
 
 function renderDnjYear(){
