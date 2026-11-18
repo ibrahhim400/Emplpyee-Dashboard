@@ -208,7 +208,7 @@ function classify(emps, opts){
   const issues = [];
   for (const e of emps){
     const s = e.statusRaw.toLowerCase();
-    e.counted = false; e.isLeft = false; e.kind = 'excluded'; e.anomaly = false;
+    e.counted = false; e.isLeft = false; e.kind = 'excluded'; e.anomaly = false; e.coming = false; e.statusShown = e.statusRaw;
     if (/did\s*not\s*join|not\s*joined|\bdnj\b|no[\s-]*show/.test(s)){ e.kind = 'dnj'; continue; }
     if (!e.join){ issues.push({e:e, msg:'Joining Date is missing or unreadable ("' + e.joinRaw + '"). Left out of all counts.'}); continue; }
     if (e.lwd && e.lwd.key < e.join.key){
@@ -217,6 +217,8 @@ function classify(emps, opts){
       issues.push({e:e, msg:'Last working day (' + e.lwdRaw + ') is before joining date (' + e.joinRaw + ').' + (opts && opts.anomalyAsDnj ? ' Counted as Did Not Join.' : ' Left out of all counts. Possibly a Did Not Join.')});
       continue;
     }
+    // Future joining date and no status yet in the sheet: show "Coming". Once the sheet has a status, the sheet wins.
+    if (!e.statusRaw && opts && opts.todayKey && e.join.key > opts.todayKey){ e.kind = 'active'; e.counted = true; e.coming = true; e.statusShown = 'Coming'; continue; }
     const active = /^active/.test(s);
     if (active){
       e.kind = 'active'; e.counted = true;
@@ -264,6 +266,7 @@ function groupCount(list, fn){
 const now = new Date();
 const todayKey = now.getFullYear()*10000 + (now.getMonth()+1)*100 + now.getDate();
 const nowIdx = now.getFullYear()*12 + now.getMonth();
+function todayK(){ const d = new Date(); return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate(); }
 const S = { tabs: [], emps: [], issues: [], year: now.getFullYear(), month: now.getMonth(), open: false, dnjBy: 'dept', stats: [], opts: {anomalyAsDnj: false}, errors: [], syncedAt: null, source: 'live' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -292,6 +295,7 @@ async function refresh(){
 
 function recompute(){
   S.emps = [].concat.apply([], S.tabs.map(t => t.emps));
+  S.opts.todayKey = todayK();
   S.issues = classify(S.emps, S.opts);
   render();
 }
@@ -328,7 +332,7 @@ function renderKpis(){
   const upto = st.filter((s, i) => y*12 + i <= nowIdx);
   const avgSum = upto.reduce((a, s) => a + s.avg, 0), leftSum = upto.reduce((a, s) => a + s.left.length, 0);
   const yearRate = upto.length && avgSum > 0 ? leftSum / (avgSum / upto.length) * 100 : null;
-  const active = S.emps.filter(e => present(e, todayKey)).length;
+  const active = S.emps.filter(e => present(e, todayK())).length;
   const tiles = [
     ['Current headcount', active],
     ['Joined in ' + y, sum('joined')],
@@ -404,7 +408,7 @@ function dnjGroups(list){
   return '<div class="dtop"><div><b class="big">' + list.length + '</b> <span class="sub">employee' + (list.length === 1 ? '' : 's') + ' did not join · date shown is the planned joining date</span></div>' + seg + '</div><div class="dgrid">' + cards + '</div>';
 }
 
-const COLS_JOIN = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw], ['Status', e => e.statusRaw], ['Tab', e => e.tab]];
+const COLS_JOIN = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw], ['Status', e => e.statusShown || e.statusRaw], ['Last working day', e => e.lwdRaw || '–']];
 const COLS_LEFT = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Last working day', e => e.lwdRaw], ['Tab', e => e.tab]];
 
 function dnjBlock(list){
