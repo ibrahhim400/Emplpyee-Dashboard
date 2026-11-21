@@ -56,6 +56,8 @@ th{color:var(--muted);font-weight:600;font-size:12px}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;background:var(--c)}
 details summary{cursor:pointer;font-weight:600}
 footer{margin-top:20px;color:var(--muted);font-size:12px}
+#depts{margin-top:12px}
+.dsub li .dd{display:block;white-space:normal;color:var(--muted);font-size:11px}
 .trow{cursor:pointer}.trow:hover{background:var(--chip)}
 .rbar{display:flex;align-items:center;gap:8px}
 .rtrack{display:block;width:90px;height:8px;border-radius:4px;background:var(--chip);overflow:hidden}
@@ -99,6 +101,7 @@ svg text{fill:var(--muted);font-size:11px}
   </header>
   <div id="banner"></div>
   <section class="kpis" id="kpis"></section>
+  <nav class="years" id="depts" aria-label="Department filter"></nav>
   <nav class="years" id="years"></nav>
   <section class="card"><h2 id="chartTitle"></h2><div id="chart"></div>
     <div class="legend"><span style="--c:var(--good)">Joined</span><span style="--c:var(--bad)">Left</span><span style="--c:var(--accent)">Turnover %</span></div>
@@ -176,7 +179,8 @@ const ALIASES = {
   status: ['emplyeestatus','employeestatus','status'],
   lwd:    ['lastwrokingday','lastworkingday','lastworkingdate','lwd'],
   dept:   ['department','dept'],
-  area:   ['updatedcoveredarea','coveredarea']
+  area:   ['updatedcoveredarea','coveredarea'],
+  desig:  ['designation']
 };
 
 function buildEmployees(rows, tabLabel){
@@ -197,7 +201,7 @@ function buildEmployees(rows, tabLabel){
     const g = k => idx[k] < 0 ? '' : clean(r[idx[k]]);
     const name = g('name'); if (!name) continue;
     out.push({
-      name: name, code: g('code'), tab: tabLabel, row: i + 1,
+      name: name, code: g('code'), tab: tabLabel, row: i + 1, desig: g('desig'),
       joinRaw: g('join'), lwdRaw: g('lwd'),
       join: parseDate(g('join')), lwd: parseDate(g('lwd')),
       statusRaw: g('status'),
@@ -272,7 +276,7 @@ const now = new Date();
 const todayKey = now.getFullYear()*10000 + (now.getMonth()+1)*100 + now.getDate();
 const nowIdx = now.getFullYear()*12 + now.getMonth();
 function todayK(){ const d = new Date(); return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate(); }
-const S = { tabs: [], emps: [], issues: [], year: now.getFullYear(), month: now.getMonth(), open: false, dnjBy: 'dept', stats: [], opts: {anomalyAsDnj: false}, errors: [], syncedAt: null, source: 'live' };
+const S = { tabs: [], emps: [], issues: [], year: now.getFullYear(), month: now.getMonth(), open: false, dnjBy: 'dept', dept: 'All', all: [], allIssues: [], stats: [], opts: {anomalyAsDnj: false}, errors: [], syncedAt: null, source: 'live' };
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtRate = r => r == null ? '–' : r.toFixed(1) + '%';
@@ -299,20 +303,28 @@ async function refresh(){
 }
 
 function recompute(){
-  S.emps = [].concat.apply([], S.tabs.map(t => t.emps));
+  S.all = [].concat.apply([], S.tabs.map(t => t.emps));
+  // Same department written with different capital letters becomes one department.
+  const spell = {};
+  S.all.forEach(e => { const k = e.dept.toLowerCase(); spell[k] = spell[k] || {}; spell[k][e.dept] = (spell[k][e.dept] || 0) + 1; });
+  S.all.forEach(e => { const o = spell[e.dept.toLowerCase()]; e.dept = Object.keys(o).sort((a, b) => o[b] - o[a])[0]; });
   S.opts.todayKey = todayK();
-  S.issues = classify(S.emps, S.opts);
+  S.allIssues = classify(S.all, S.opts);
   render();
 }
 
 function render(){
-  const ys = S.emps.flatMap(e => [e.join && e.join.y, e.lwd && e.lwd.y]).filter(Boolean);
+  S.depts = groupCount(S.all, e => e.dept).map(g => g[0]);
+  if (S.dept !== 'All' && S.depts.indexOf(S.dept) < 0) S.dept = 'All';
+  S.emps = S.dept === 'All' ? S.all : S.all.filter(e => e.dept === S.dept);
+  S.issues = S.allIssues.filter(i => S.dept === 'All' || i.e.dept === S.dept);
+  const ys = S.all.flatMap(e => [e.join && e.join.y, e.lwd && e.lwd.y]).filter(Boolean);
   const minY = ys.length ? Math.min.apply(null, ys) : now.getFullYear();
   const maxY = Math.max(now.getFullYear(), ys.length ? Math.max.apply(null, ys) : 0);
   S.years = []; for (let y = minY; y <= maxY; y++) S.years.push(y);
   if (S.years.indexOf(S.year) < 0) S.year = S.years[S.years.length - 1];
   S.stats = []; for (let m = 0; m < 12; m++) S.stats.push(monthStats(S.emps, S.year, m));
-  renderBanner(); renderKpis(); renderYears(); renderChart(); renderMonths(); renderTurnover();
+  renderBanner(); renderDepts(); renderKpis(); renderYears(); renderChart(); renderMonths(); renderTurnover();
   const sc = $('detail').scrollTop; renderDetail(); $('detail').scrollTop = sc;
   $('modal').hidden = !S.open; document.body.style.overflow = S.open ? 'hidden' : '';
   renderDnjYear(); renderIssues();
@@ -346,6 +358,12 @@ function renderKpis(){
     ['Turnover ' + y + ' (total left ÷ avg headcount)', fmtRate(yearRate)]
   ];
   $('kpis').innerHTML = tiles.map(t => '<div class="kpi"><small>' + esc(t[0]) + '</small><b>' + esc(t[1]) + '</b></div>').join('');
+}
+
+function renderDepts(){
+  $('depts').innerHTML = S.depts.length < 2 ? '' :
+    '<button type="button" data-dept="All" class="' + (S.dept === 'All' ? 'on' : '') + '">All departments</button>' +
+    S.depts.map(d => '<button type="button" data-dept="' + esc(d) + '" class="' + (S.dept === d ? 'on' : '') + '">' + esc(d) + '</button>').join('');
 }
 
 function renderYears(){
@@ -404,7 +422,7 @@ function renderTurnover(){
 function hcAt(key){ return S.emps.filter(e => present(e, key)); }
 function hcDetails(y, m){
   const prevEnd = m === 0 ? (y-1)*10000 + 1231 : y*10000 + m*100 + 31, endK = y*10000 + (m+1)*100 + 31;
-  const cols = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw]];
+  const cols = [['Employee', e => e.name], ['Designation', e => e.desig || '–'], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw]];
   const d = (t, k) => { const l = hcAt(k); return '<details style="margin-top:12px"><summary>' + t + ' (' + l.length + ')</summary><div style="margin-top:8px">' + table(l, cols) + '</div></details>'; };
   return d('Headcount at start of ' + MN[m] + ' (everyone already working)', prevEnd) + d('Headcount at end of ' + MN[m], endK);
 }
@@ -432,15 +450,15 @@ function dnjGroups(list){
     const subs = groupCount(members, sk).map(s => {
       const people = members.filter(e => sk(e) === s[0]).sort((a, b) => (a.join ? a.join.key : 0) - (b.join ? b.join.key : 0));
       return '<div class="dsub"><div class="dsh"><span>' + esc(s[0]) + '</span><em>' + s[1] + '</em></div><ul>' +
-        people.map(e => '<li><span>' + esc(e.name) + '</span><small>' + esc(e.joinRaw) + '</small></li>').join('') + '</ul></div>';
+        people.map(e => '<li><span>' + esc(e.name) + (e.desig ? '<small class="dd">' + esc(e.desig) + '</small>' : '') + '</span><small>' + esc(e.joinRaw) + '</small></li>').join('') + '</ul></div>';
     }).join('');
     return '<div class="dgrp"><div class="dh"><b>' + esc(g[0]) + '</b><span class="cnt">' + g[1] + '</span></div>' + subs + '</div>';
   }).join('');
   return '<div class="dtop"><div><b class="big">' + list.length + '</b> <span class="sub">employee' + (list.length === 1 ? '' : 's') + ' did not join · date shown is the planned joining date</span></div>' + seg + '</div><div class="dgrid">' + cards + '</div>';
 }
 
-const COLS_JOIN = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw], ['Status', e => e.statusShown || e.statusRaw], ['Last working day', e => e.lwdRaw || '–']];
-const COLS_LEFT = [['Employee', e => e.name], ['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Last working day', e => e.lwdRaw], ['Tab', e => e.tab]];
+const COLS_JOIN = [['Employee', e => e.name], ['Designation', e => e.desig || '–'],['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Joining date', e => e.joinRaw], ['Status', e => e.statusShown || e.statusRaw], ['Last working day', e => e.lwdRaw || '–']];
+const COLS_LEFT = [['Employee', e => e.name], ['Designation', e => e.desig || '–'],['Department', e => e.dept], ['Area (Covered Area)', e => e.area], ['Last working day', e => e.lwdRaw], ['Tab', e => e.tab]];
 
 function dnjBlock(list){
   if (!list.length) return '<div class="empty">No “Did Not Join” employees in this period.</div>';
@@ -452,7 +470,7 @@ function renderDetail(){
   const tile = (l, v) => '<div class="tile"><small>' + l + '</small><b>' + v + '</b></div>';
   const f = s.avg > 0 ? s.left.length + ' ÷ ((' + s.open + ' + ' + s.close + ') ÷ 2) × 100 = ' + fmtRate(s.rate) : 'No headcount in this month, so turnover cannot be calculated.';
   $('detail').innerHTML =
-    '<h2 id="dtitle">' + title + '</h2>' +
+    '<h2 id="dtitle">' + title + (S.dept === 'All' ? '' : ' <small style="font-weight:500;color:var(--muted)">· ' + esc(S.dept) + '</small>') + '</h2>' +
     '<div class="tiles">' + tile('Joined', s.joined.length) + tile('Did Not Join', s.dnj.length) + tile('Left', s.left.length) + tile('Headcount at start', s.open) + tile('Headcount at end', s.close) + tile('Turnover', fmtRate(s.rate)) + '</div>' +
     '<p class="formula">Turnover = left ÷ ((start + end headcount) ÷ 2) × 100 → ' + f + '</p>' +
     '<h3>Joined in ' + title + ' (' + s.joined.length + ')</h3>' +
@@ -471,14 +489,15 @@ function renderDnjYear(){
 function renderIssues(){
   const d = $('issues');
   d.innerHTML = '<summary>Data check (' + S.issues.length + ' item' + (S.issues.length === 1 ? '' : 's') + ' to review in the sheet)</summary>' +
-    (S.issues.length ? '<div class="tw" style="margin-top:10px"><table><thead><tr><th>Employee</th><th>Tab / row</th><th>Issue</th></tr></thead><tbody>' +
-      S.issues.map(i => '<tr><td>' + esc(i.e.name) + '</td><td>' + esc(i.e.tab) + ' / ' + i.e.row + '</td><td>' + esc(i.msg) + '</td></tr>').join('') + '</tbody></table></div>'
+    (S.issues.length ? '<div class="tw" style="margin-top:10px"><table><thead><tr><th>Employee</th><th>Designation</th><th>Tab / row</th><th>Issue</th></tr></thead><tbody>' +
+      S.issues.map(i => '<tr><td>' + esc(i.e.name) + '</td><td>' + esc(i.e.desig || '–') + '</td><td>' + esc(i.e.tab) + ' / ' + i.e.row + '</td><td>' + esc(i.msg) + '</td></tr>').join('') + '</tbody></table></div>'
       : '<div class="empty">No problems found.</div>');
 }
 
 /* ======================= EVENTS ======================= */
 document.addEventListener('click', ev => {
   const dn = ev.target.closest('[data-dnj]'); if (dn){ S.dnjBy = dn.dataset.dnj; render(); return; }
+  const dp = ev.target.closest('[data-dept]'); if (dp){ S.dept = dp.dataset.dept; render(); return; }
   const y = ev.target.closest('[data-y]'); if (y){ S.year = +y.dataset.y; render(); return; }
   const m = ev.target.closest('[data-m]'); if (m && !m.disabled){ S.month = +m.dataset.m; S.open = true; render(); }
 });
